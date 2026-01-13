@@ -318,6 +318,60 @@ if request.id.is_none() {
 ### Summary
 Everything is installed and configured correctly. Just waiting for Zed restart to activate the MCP integration.
 
+## 2026-01-13: WASM Component Format Fix - Critical Discovery
+
+### Issue Found After Restart #4
+Zed logs showed extension loading error:
+```
+ERROR [extension_host] Failed to load extension: totalrecall
+failed to compile wasm component: failed to parse WebAssembly module: 
+attempted to parse a wasm module with a component parser
+```
+
+### Root Cause
+**Wrong WASM format**: We built a regular WASM module (MVP version 0x1), but Zed requires WebAssembly Components (version 0x1000d).
+
+**Comparison**:
+- `chrome-devtools-mcp/extension.wasm`: `WebAssembly (wasm) binary module version 0x1000d` ✅
+- Our `extension.wasm`: `WebAssembly (wasm) binary module version 0x1 (MVP)` ❌
+
+### Solution Applied
+1. **Changed build target**: From `wasm32-wasip1` to `wasm32-unknown-unknown`
+   - WASI preview1 imports caused component conversion to fail
+   - `wasm32-unknown-unknown` produces pure WASM without WASI dependencies
+   
+2. **Installed wasm-tools**: `cargo install wasm-tools`
+   
+3. **Converted module to component**:
+   ```bash
+   cargo build --release --target wasm32-unknown-unknown
+   wasm-tools component new target/wasm32-unknown-unknown/release/totalrecall.wasm -o extension.wasm
+   ```
+
+4. **Verified format**: `file extension.wasm` now shows `version 0x1000d` ✅
+
+5. **Installed to Zed**: Copied to `~/Library/Application Support/Zed/extensions/installed/totalrecall/`
+
+### Key Learnings
+- Zed extensions MUST be WebAssembly Components, not regular modules
+- Use `wasm32-unknown-unknown` target to avoid WASI import issues
+- `wasm-tools component new` converts module → component format
+- Extension format is critical - wrong format causes silent loading failure
+
+### Current Status
+- ✅ Correct WASM component format (0x1000d)
+- ✅ Extension installed at correct path
+- ✅ MCP binary built and in PATH
+- ✅ Zed settings configured with `"enabled": true`
+- 🔄 **Awaiting Zed restart #5** to load fixed extension
+
+### Next Steps
+After restart:
+1. Verify extension loads without errors in Zed logs
+2. Confirm Total Recall tools appear in Claude Code session
+3. Test all MCP operations (store, search, list, delete)
+4. Document successful integration
+
 
 ## 2026-01-13: Zed Extension Installation - Final Step
 
