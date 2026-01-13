@@ -678,3 +678,47 @@ Expected outcome:
 - `zed-extension/Cargo.toml` - Added serde and schemars dependencies
 - Extension rebuilt and reinstalled
 
+## 2026-01-13: Tokio Runtime Removed - Ninth Restart
+
+### Issue Found After Restart #8
+The MCP server was still timing out during initialization (60s timeout):
+```
+ERROR [context_server::client] cancelled csp request task for "initialize" id 0 which took over 60s
+ERROR [project::context_server_store] totalrecall context server failed to start: Context server request timeout
+```
+
+### Root Cause
+The `main.rs` had `#[tokio::main]` which started an async runtime, but the MCP server's `run()` method is synchronous and blocks on stdin. The Tokio runtime initialization was causing delays or conflicts with stdio handling.
+
+### Fix Applied
+Removed the unnecessary async runtime from `main.rs`:
+```rust
+// Before:
+#[tokio::main]
+async fn main() -> Result<()> {
+
+// After:
+fn main() -> Result<()> {
+```
+
+### Verification
+Server now responds in **0.569 seconds** (was timing out at 60s):
+```bash
+$ time echo '{"jsonrpc":"2.0","id":1,"method":"initialize",...}' | rag-mcp serve
+# Response: 0.569s ✅
+```
+
+### Current Status
+- ✅ MCP server rebuilt and installed without Tokio runtime
+- ✅ Initialize response time: <1 second
+- ✅ Extension installed with correct dependencies
+- 🔄 **Awaiting Zed restart #9**
+
+### Next Action
+**User needs to restart Zed (9th time)** to pick up the fixed binary.
+
+Expected outcome:
+- MCP server starts quickly (<1s)
+- No timeout errors in Zed logs
+- Total Recall tools appear in Claude Code session
+

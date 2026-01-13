@@ -94,15 +94,15 @@ fn parse_scope(scope: &str, project_path: Option<PathBuf>) -> Result<MemoryScope
         "session" => Ok(MemoryScope::Session),
         "global" => Ok(MemoryScope::Global),
         "project" => {
-            let path = project_path.ok_or_else(|| anyhow::anyhow!("project_path required for project scope"))?;
+            let path = project_path
+                .ok_or_else(|| anyhow::anyhow!("project_path required for project scope"))?;
             Ok(MemoryScope::Project { path })
         }
         _ => anyhow::bail!("Invalid scope: {}. Use session, project, or global", scope),
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // For serve mode, send logs to stderr to keep stdout clean for JSON-RPC
@@ -115,7 +115,12 @@ async fn main() -> Result<()> {
             let mut server = McpServer::new(config)?;
             server.run()?;
         }
-        Commands::Add { content, scope, tags, project_path } => {
+        Commands::Add {
+            content,
+            scope,
+            tags,
+            project_path,
+        } => {
             let config = Config::load()?;
             let mut store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
@@ -131,7 +136,12 @@ async fn main() -> Result<()> {
             store.store(memory)?;
             info!("Memory stored with ID: {}", id);
         }
-        Commands::Search { query, k, scope, project_path } => {
+        Commands::Search {
+            query,
+            k,
+            scope,
+            project_path,
+        } => {
             let config = Config::load()?;
             let store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
@@ -157,7 +167,11 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::List { scope, limit, project_path } => {
+        Commands::List {
+            scope,
+            limit,
+            project_path,
+        } => {
             let config = Config::load()?;
             let store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
@@ -176,7 +190,11 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Delete { id, scope, project_path } => {
+        Commands::Delete {
+            id,
+            scope,
+            project_path,
+        } => {
             let config = Config::load()?;
             let mut store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
@@ -188,7 +206,10 @@ async fn main() -> Result<()> {
                 error!("Memory {} not found", id);
             }
         }
-        Commands::Stats { scope, project_path } => {
+        Commands::Stats {
+            scope,
+            project_path,
+        } => {
             let config = Config::load()?;
             let store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
