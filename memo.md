@@ -496,3 +496,185 @@ cp target/wasm32-wasip1/release/totalrecall.wasm ~/Library/Application\ Support/
 - Check Zed logs for MCP server spawning
 - Tools appear in Claude Code with `mcp__` prefix (likely `mcp__totalrecall__store_memory` etc.)
 
+## 2026-01-13: Missing lib.version in extension.toml - Sixth Restart
+
+### Issue Found After Restart #5
+The extension was registered in Zed's index but had:
+```json
+"lib": { "kind": "Rust", "version": null }
+```
+
+Compared to working extensions like chrome-devtools-mcp:
+```json
+"lib": { "kind": "Rust", "version": "0.7.0" }
+```
+
+### Root Cause
+The `extension.toml` was missing the `[lib]` section with version information.
+
+### Fix Applied
+Updated `zed-extension/extension.toml` to include:
+```toml
+[lib]
+kind = "Rust"
+version = "0.2.0"
+```
+
+### Steps Taken
+1. ✅ Added `[lib]` section to `extension.toml`
+2. ✅ Rebuilt extension: `cargo build --release --target wasm32-unknown-unknown`
+3. ✅ Converted to component: `wasm-tools component new ... -o extension.wasm`
+4. ✅ Verified WASM format: `version 0x1000d` ✓
+5. ✅ Copied both files to `~/Library/Application Support/Zed/extensions/installed/totalrecall/`
+
+### Current Status
+- ✅ Extension has correct `lib.version` field
+- ✅ WASM component format verified (0x1000d)
+- ✅ Both extension.toml and extension.wasm updated in Zed extensions directory
+- 🔄 **Awaiting Zed restart #6**
+
+### Key Learning
+The `[lib]` section in extension.toml is critical for Zed to properly initialize the extension. Without it, the extension registers but may not load fully.
+
+### Next Action
+**User needs to restart Zed (6th time)** for the updated extension manifest to be re-indexed.
+
+After restart:
+- Extension should have proper version in index.json
+- MCP server should spawn when Claude Code starts
+- Total Recall tools should appear in Claude Code session
+
+## 2026-01-13: API Version Mismatch - Seventh Restart
+
+### Issue Found After Restart #6
+Extension was still panicking during initialization:
+```
+ERROR [extension_host] Failed to load extension: totalrecall
+failed to initialize wasm extension: error while executing at wasm backtrace
+wasm trap: wasm `unreachable` instruction executed
+```
+
+### Root Cause
+**API Version Mismatch**: Using `zed_extension_api = "0.2.0"` instead of `"0.7.0"`
+
+The working chrome-devtools extension uses:
+- `lib.version = "0.7.0"` in extension.toml
+- `zed_extension_api = "0.7.0"` in Cargo.toml
+
+We had updated the lib.version but not the actual dependency version.
+
+### Fix Applied
+Updated both files to use API version 0.7.0:
+
+**`zed-extension/Cargo.toml`**:
+```toml
+[dependencies]
+zed_extension_api = "0.7.0"
+```
+
+**`zed-extension/extension.toml`**:
+```toml
+[lib]
+kind = "Rust"
+version = "0.7.0"
+```
+
+### Build Steps
+1. ✅ Updated Cargo.toml dependency to 0.7.0
+2. ✅ Updated extension.toml lib.version to 0.7.0
+3. ✅ Rebuilt: `cargo build --release --target wasm32-unknown-unknown` (15.33s)
+4. ✅ Converted to component: `wasm-tools component new ... -o extension.wasm`
+5. ✅ Verified format: `version 0x1000d` ✓
+6. ✅ Installed to `~/Library/Application Support/Zed/extensions/installed/totalrecall/`
+
+### Current Status
+- ✅ Correct API version (0.7.0) in both Cargo.toml and extension.toml
+- ✅ WASM component built and installed
+- ✅ Binary size: ~130KB (increased from 85KB due to newer API)
+- 🔄 **Awaiting Zed restart #7**
+
+### Key Learning
+Both the `zed_extension_api` dependency version in Cargo.toml AND the `lib.version` in extension.toml must match the version Zed expects. Version mismatches cause panics during WASM initialization.
+
+### Next Action
+**User needs to restart Zed (7th time)** to load the extension with the correct API version.
+
+Expected outcome:
+- No more initialization panics
+- MCP server spawns successfully
+- Total Recall tools appear in Claude Code session
+
+
+## 2026-01-13: Missing Dependencies - Eighth Restart
+
+### Issue Found After Restart #7
+The extension was still panicking during initialization with the same error:
+```
+ERROR [extension_host] Failed to load extension: totalrecall
+failed to initialize wasm extension: error while executing at wasm backtrace:
+wasm trap: wasm `unreachable` instruction executed
+```
+
+Despite having the correct API version (0.7.0), the extension continued to fail.
+
+### Root Cause Discovery
+After examining working extensions (chrome-devtools-mcp and postgres-context-server), discovered that **ALL working Zed extensions include `serde` and `schemars` dependencies**, even when they don't explicitly use them in the code.
+
+**Working extension pattern**:
+```toml
+[dependencies]
+zed_extension_api = "0.7.0"
+serde = "1.0"
+schemars = "0.8"  # or "1.1" in newer extensions
+```
+
+**Our original Cargo.toml** (missing dependencies):
+```toml
+[dependencies]
+zed_extension_api = "0.7.0"
+```
+
+### Fix Applied
+Added the missing dependencies to `zed-extension/Cargo.toml`:
+
+```toml
+[dependencies]
+zed_extension_api = "0.7.0"
+serde = "1.0"
+schemars = "0.8"
+```
+
+### Build and Install
+1. ✅ Updated Cargo.toml with serde and schemars
+2. ✅ Rebuilt: `cargo build --release --target wasm32-unknown-unknown` (4.63s)
+3. ✅ Converted to component: `wasm-tools component new ... -o extension.wasm`
+4. ✅ Verified format: `version 0x1000d` ✓
+5. ✅ Installed to `~/Library/Application Support/Zed/extensions/installed/totalrecall/`
+6. ✅ Extension size: 143KB
+
+### Current Status
+- ✅ Correct API version (0.7.0)
+- ✅ Required dependencies added (serde, schemars)
+- ✅ WASM component built and installed
+- 🔄 **Awaiting Zed restart #8**
+
+### Key Learning
+The `zed_extension_api` crate requires `serde` and `schemars` to be present in the dependency tree during WASM initialization. These are not optional - all working Zed extensions include them. The panic during initialization was caused by missing these expected dependencies.
+
+### Next Action
+**User needs to restart Zed (8th time)** to load the extension with all required dependencies.
+
+Expected outcome:
+- Extension loads without initialization panics
+- MCP server spawns successfully when Claude Code starts
+- Total Recall tools appear in Claude Code session:
+  - `mcp__totalrecall__store_memory`
+  - `mcp__totalrecall__search_memory`
+  - `mcp__totalrecall__list_memories`
+  - `mcp__totalrecall__delete_memory`
+  - `mcp__totalrecall__clear_session`
+
+### Files Modified
+- `zed-extension/Cargo.toml` - Added serde and schemars dependencies
+- Extension rebuilt and reinstalled
+
