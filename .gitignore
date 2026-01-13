@@ -32,3 +32,6 @@ models/
 Thumbs.db
 .Spotlight-V100
 .Trashes
+
+# Zed extension build artifacts
+zed-extension/target/

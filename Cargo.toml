@@ -4,6 +4,7 @@ members = [
     "crates/rag-core",
     "crates/rag-search",
 ]
+exclude = ["zed-extension"]
 resolver = "2"
 
 [workspace.package]

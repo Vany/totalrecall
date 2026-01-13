@@ -48,21 +48,32 @@ impl McpServer {
 
                     debug!("Received: {}", line);
 
-                    let response = match serde_json::from_str::<JsonRpcRequest>(line) {
-                        Ok(request) => self.handle_request(request),
+                    match serde_json::from_str::<JsonRpcRequest>(line) {
+                        Ok(request) => {
+                            // Handle notifications (no response needed)
+                            if request.id.is_none() {
+                                debug!("Received notification: {}", request.method);
+                                if request.method.starts_with("notifications/") {
+                                    // Silently ignore notifications
+                                    continue;
+                                }
+                            }
+
+                            // Handle requests (response needed)
+                            let response = self.handle_request(request);
+                            let response_str = serde_json::to_string(&response)?;
+                            writeln!(stdout, "{}", response_str)?;
+                            stdout.flush()?;
+                        }
                         Err(e) => {
                             error!("Failed to parse request: {}", e);
-                            JsonRpcResponse::error(
-                                None,
-                                -32700,
-                                format!("Parse error: {}", e),
-                            )
+                            let response =
+                                JsonRpcResponse::error(None, -32700, format!("Parse error: {}", e));
+                            let response_str = serde_json::to_string(&response)?;
+                            writeln!(stdout, "{}", response_str)?;
+                            stdout.flush()?;
                         }
-                    };
-
-                    let response_str = serde_json::to_string(&response)?;
-                    writeln!(stdout, "{}", response_str)?;
-                    stdout.flush()?;
+                    }
                 }
                 Err(e) => {
                     error!("Failed to read line: {}", e);
@@ -221,7 +232,11 @@ impl McpServer {
         let scope_str = args["scope"].as_str().context("Missing scope")?;
         let tags: Vec<String> = args["tags"]
             .as_array()
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
         let scope = match scope_str {
@@ -260,7 +275,9 @@ impl McpServer {
     fn tool_search_memory(&mut self, args: &Value) -> Result<Value> {
         let query = args["query"].as_str().context("Missing query")?;
         let scope_str = args["scope"].as_str().context("Missing scope")?;
-        let k = args["k"].as_u64().unwrap_or(self.config.search.default_k as u64) as usize;
+        let k = args["k"]
+            .as_u64()
+            .unwrap_or(self.config.search.default_k as u64) as usize;
 
         let scope = match scope_str {
             "session" => MemoryScope::Session,
@@ -286,9 +303,7 @@ impl McpServer {
             for result in &results {
                 output.push_str(&format!(
                     "Score: {:.2} | ID: {}\n{}\n\n---\n\n",
-                    result.score,
-                    result.memory.id,
-                    result.memory.content
+                    result.score, result.memory.id, result.memory.content
                 ));
             }
             output
