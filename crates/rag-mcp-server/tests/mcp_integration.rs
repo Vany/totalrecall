@@ -13,7 +13,7 @@ struct McpClient {
 
 impl McpClient {
     fn spawn() -> Result<Self> {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_rag-mcp"))
+        let child = Command::new(env!("CARGO_BIN_EXE_rag-mcp"))
             .arg("serve")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -51,22 +51,26 @@ impl McpClient {
         let mut line = String::new();
         reader.read_line(&mut line)?;
 
-        let response: Value = serde_json::from_str(&line.trim())?;
+        let response: Value = serde_json::from_str(line.trim())?;
 
         if let Some(error) = response.get("error") {
             anyhow::bail!("MCP error: {}", error);
         }
 
-        response.get("result")
+        response
+            .get("result")
             .cloned()
             .context("No result in response")
     }
 
     fn call_tool(&mut self, name: &str, arguments: Value) -> Result<Value> {
-        self.send_request("tools/call", Some(json!({
-            "name": name,
-            "arguments": arguments,
-        })))
+        self.send_request(
+            "tools/call",
+            Some(json!({
+                "name": name,
+                "arguments": arguments,
+            })),
+        )
     }
 }
 
@@ -83,14 +87,17 @@ impl Drop for McpClient {
 fn test_initialize() -> Result<()> {
     let mut client = McpClient::spawn()?;
 
-    let result = client.send_request("initialize", Some(json!({
-        "protocolVersion": "2024-11-05",
-        "capabilities": {},
-        "clientInfo": {
-            "name": "test-client",
-            "version": "0.1.0"
-        }
-    })))?;
+    let result = client.send_request(
+        "initialize",
+        Some(json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "test-client",
+                "version": "0.1.0"
+            }
+        })),
+    )?;
 
     assert_eq!(result["protocolVersion"], "2024-11-05");
     assert!(result["capabilities"].is_object());
@@ -110,9 +117,7 @@ fn test_tools_list() -> Result<()> {
 
     assert!(tools.len() >= 5, "Expected at least 5 tools");
 
-    let tool_names: Vec<&str> = tools.iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
+    let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert!(tool_names.contains(&"store_memory"));
     assert!(tool_names.contains(&"search_memory"));
@@ -130,11 +135,14 @@ fn test_store_and_search_session() -> Result<()> {
     let mut client = McpClient::spawn()?;
 
     // Store a memory in session scope
-    let store_result = client.call_tool("store_memory", json!({
-        "content": "Rust is a systems programming language",
-        "scope": "session",
-        "tags": ["rust", "programming"]
-    }))?;
+    let store_result = client.call_tool(
+        "store_memory",
+        json!({
+            "content": "Rust is a systems programming language",
+            "scope": "session",
+            "tags": ["rust", "programming"]
+        }),
+    )?;
 
     let content = &store_result["content"];
     assert!(content.is_array());
@@ -142,11 +150,14 @@ fn test_store_and_search_session() -> Result<()> {
     assert!(text.contains("Memory stored successfully"));
 
     // Search for the memory
-    let search_result = client.call_tool("search_memory", json!({
-        "query": "rust programming",
-        "scope": "session",
-        "k": 5
-    }))?;
+    let search_result = client.call_tool(
+        "search_memory",
+        json!({
+            "query": "rust programming",
+            "scope": "session",
+            "k": 5
+        }),
+    )?;
 
     let search_text = search_result["content"][0]["text"].as_str().unwrap();
     assert!(search_text.contains("Found 1 results"));
@@ -158,31 +169,39 @@ fn test_store_and_search_session() -> Result<()> {
 #[test]
 #[serial]
 fn test_store_and_list() -> Result<()> {
-
     let mut client = McpClient::spawn()?;
 
     // Clear session first
     client.call_tool("clear_session", json!({}))?;
 
     // Store multiple memories
-    client.call_tool("store_memory", json!({
-        "content": "First memory about Rust",
-        "scope": "session",
-        "tags": ["rust"]
-    }))?;
+    client.call_tool(
+        "store_memory",
+        json!({
+            "content": "First memory about Rust",
+            "scope": "session",
+            "tags": ["rust"]
+        }),
+    )?;
 
-    client.call_tool("store_memory", json!({
-        "content": "Second memory about BM25",
-        "scope": "session",
-        "tags": ["search"]
-    }))?;
+    client.call_tool(
+        "store_memory",
+        json!({
+            "content": "Second memory about BM25",
+            "scope": "session",
+            "tags": ["search"]
+        }),
+    )?;
 
     // List memories
-    let list_result = client.call_tool("list_memories", json!({
-        "scope": "session",
-        "limit": 10,
-        "offset": 0
-    }))?;
+    let list_result = client.call_tool(
+        "list_memories",
+        json!({
+            "scope": "session",
+            "limit": 10,
+            "offset": 0
+        }),
+    )?;
 
     let list_text = list_result["content"][0]["text"].as_str().unwrap();
     assert!(list_text.contains("Found 2 memories"));
@@ -195,18 +214,20 @@ fn test_store_and_list() -> Result<()> {
 #[test]
 #[serial]
 fn test_delete_memory() -> Result<()> {
-
     let mut client = McpClient::spawn()?;
 
     // Clear session
     client.call_tool("clear_session", json!({}))?;
 
     // Store a memory
-    let store_result = client.call_tool("store_memory", json!({
-        "content": "Memory to delete",
-        "scope": "session",
-        "tags": []
-    }))?;
+    let store_result = client.call_tool(
+        "store_memory",
+        json!({
+            "content": "Memory to delete",
+            "scope": "session",
+            "tags": []
+        }),
+    )?;
 
     let store_text = store_result["content"][0]["text"].as_str().unwrap();
     let id = store_text
@@ -216,19 +237,25 @@ fn test_delete_memory() -> Result<()> {
         .context("Failed to extract ID")?;
 
     // Delete the memory
-    let delete_result = client.call_tool("delete_memory", json!({
-        "id": id,
-        "scope": "session"
-    }))?;
+    let delete_result = client.call_tool(
+        "delete_memory",
+        json!({
+            "id": id,
+            "scope": "session"
+        }),
+    )?;
 
     let delete_text = delete_result["content"][0]["text"].as_str().unwrap();
     assert!(delete_text.contains("deleted successfully"));
 
     // Verify it's gone
-    let list_result = client.call_tool("list_memories", json!({
-        "scope": "session",
-        "limit": 10
-    }))?;
+    let list_result = client.call_tool(
+        "list_memories",
+        json!({
+            "scope": "session",
+            "limit": 10
+        }),
+    )?;
 
     let list_text = list_result["content"][0]["text"].as_str().unwrap();
     assert!(list_text.contains("No memories found") || list_text.contains("Found 0"));
@@ -239,16 +266,18 @@ fn test_delete_memory() -> Result<()> {
 #[test]
 #[serial]
 fn test_clear_session() -> Result<()> {
-
     let mut client = McpClient::spawn()?;
 
     // Store some memories
     for i in 0..3 {
-        client.call_tool("store_memory", json!({
-            "content": format!("Test memory {}", i),
-            "scope": "session",
-            "tags": []
-        }))?;
+        client.call_tool(
+            "store_memory",
+            json!({
+                "content": format!("Test memory {}", i),
+                "scope": "session",
+                "tags": []
+            }),
+        )?;
     }
 
     // Clear session
@@ -257,10 +286,13 @@ fn test_clear_session() -> Result<()> {
     assert!(clear_text.contains("cleared successfully"));
 
     // Verify all gone
-    let list_result = client.call_tool("list_memories", json!({
-        "scope": "session",
-        "limit": 10
-    }))?;
+    let list_result = client.call_tool(
+        "list_memories",
+        json!({
+            "scope": "session",
+            "limit": 10
+        }),
+    )?;
 
     let list_text = list_result["content"][0]["text"].as_str().unwrap();
     assert!(list_text.contains("No memories found"));
@@ -271,47 +303,66 @@ fn test_clear_session() -> Result<()> {
 #[test]
 #[serial]
 fn test_bm25_ranking() -> Result<()> {
-
     let mut client = McpClient::spawn()?;
 
     client.call_tool("clear_session", json!({}))?;
 
     // Store memories with varying relevance
-    client.call_tool("store_memory", json!({
-        "content": "Rust programming language for systems",
-        "scope": "session",
-        "tags": []
-    }))?;
+    client.call_tool(
+        "store_memory",
+        json!({
+            "content": "Rust programming language for systems",
+            "scope": "session",
+            "tags": []
+        }),
+    )?;
 
-    client.call_tool("store_memory", json!({
-        "content": "Python is great for scripting",
-        "scope": "session",
-        "tags": []
-    }))?;
+    client.call_tool(
+        "store_memory",
+        json!({
+            "content": "Python is great for scripting",
+            "scope": "session",
+            "tags": []
+        }),
+    )?;
 
-    client.call_tool("store_memory", json!({
-        "content": "Rust systems programming with safety guarantees",
-        "scope": "session",
-        "tags": []
-    }))?;
+    client.call_tool(
+        "store_memory",
+        json!({
+            "content": "Rust systems programming with safety guarantees",
+            "scope": "session",
+            "tags": []
+        }),
+    )?;
 
     // Search for "rust systems"
-    let search_result = client.call_tool("search_memory", json!({
-        "query": "rust systems",
-        "scope": "session",
-        "k": 5
-    }))?;
+    let search_result = client.call_tool(
+        "search_memory",
+        json!({
+            "query": "rust systems",
+            "scope": "session",
+            "k": 5
+        }),
+    )?;
 
     let search_text = search_result["content"][0]["text"].as_str().unwrap();
 
     // Should find 2 results (Rust-related)
-    assert!(search_text.contains("Found 2 results"), "Expected 2 results, got: {}", search_text);
+    assert!(
+        search_text.contains("Found 2 results"),
+        "Expected 2 results, got: {}",
+        search_text
+    );
 
     // The result with both "rust" and "systems" should rank higher
     // Just verify the top result contains "rust" (either case)
-    assert!(search_text.to_lowercase().contains("rust systems") ||
-            (search_text.to_lowercase().contains("rust") && search_text.to_lowercase().contains("systems")),
-            "Expected top result to contain both 'rust' and 'systems'. Got: {}", search_text);
+    assert!(
+        search_text.to_lowercase().contains("rust systems")
+            || (search_text.to_lowercase().contains("rust")
+                && search_text.to_lowercase().contains("systems")),
+        "Expected top result to contain both 'rust' and 'systems'. Got: {}",
+        search_text
+    );
 
     Ok(())
 }
@@ -319,23 +370,28 @@ fn test_bm25_ranking() -> Result<()> {
 #[test]
 #[serial]
 fn test_tags_in_storage() -> Result<()> {
-
     let mut client = McpClient::spawn()?;
 
     client.call_tool("clear_session", json!({}))?;
 
     // Store with specific tags
-    client.call_tool("store_memory", json!({
-        "content": "Tagged memory",
-        "scope": "session",
-        "tags": ["important", "rust", "async"]
-    }))?;
+    client.call_tool(
+        "store_memory",
+        json!({
+            "content": "Tagged memory",
+            "scope": "session",
+            "tags": ["important", "rust", "async"]
+        }),
+    )?;
 
     // List and verify tags appear
-    let list_result = client.call_tool("list_memories", json!({
-        "scope": "session",
-        "limit": 10
-    }))?;
+    let list_result = client.call_tool(
+        "list_memories",
+        json!({
+            "scope": "session",
+            "limit": 10
+        }),
+    )?;
 
     let list_text = list_result["content"][0]["text"].as_str().unwrap();
     assert!(list_text.contains("important"));
@@ -348,17 +404,19 @@ fn test_tags_in_storage() -> Result<()> {
 #[test]
 #[serial]
 fn test_empty_search_results() -> Result<()> {
-
     let mut client = McpClient::spawn()?;
 
     client.call_tool("clear_session", json!({}))?;
 
     // Search with no memories
-    let search_result = client.call_tool("search_memory", json!({
-        "query": "nonexistent query",
-        "scope": "session",
-        "k": 5
-    }))?;
+    let search_result = client.call_tool(
+        "search_memory",
+        json!({
+            "query": "nonexistent query",
+            "scope": "session",
+            "k": 5
+        }),
+    )?;
 
     let search_text = search_result["content"][0]["text"].as_str().unwrap();
     assert!(search_text.contains("No matching memories found"));

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use rag_core::{Memory, SearchResult};
 use regex::Regex;
 use std::collections::HashMap;
@@ -29,10 +28,10 @@ impl BM25SearchEngine {
 
     fn default_stop_words() -> Vec<String> {
         vec![
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-            "of", "with", "is", "was", "are", "were", "be", "been", "being",
-            "have", "has", "had", "do", "does", "did", "will", "would", "could",
-            "should", "may", "might", "can", "this", "that", "these", "those",
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+            "is", "was", "are", "were", "be", "been", "being", "have", "has", "had", "do", "does",
+            "did", "will", "would", "could", "should", "may", "might", "can", "this", "that",
+            "these", "those",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -97,7 +96,11 @@ impl BM25SearchEngine {
 
     fn score_document(&self, memory: &Memory, query_tokens: &[String]) -> f32 {
         let doc_tokens = self.tokenize(&memory.content);
-        let doc_len = self.doc_lengths.get(&memory.id).copied().unwrap_or(doc_tokens.len());
+        let doc_len = self
+            .doc_lengths
+            .get(&memory.id)
+            .copied()
+            .unwrap_or(doc_tokens.len());
 
         let mut term_freq: HashMap<String, usize> = HashMap::new();
         for token in &doc_tokens {
@@ -126,7 +129,7 @@ impl BM25SearchEngine {
     }
 
     pub fn remove_memory(&mut self, memory_id: &str) {
-        if let Some(doc_len) = self.doc_lengths.remove(memory_id) {
+        if self.doc_lengths.remove(memory_id).is_some() {
             self.doc_count = self.doc_count.saturating_sub(1);
 
             if self.doc_count > 0 {
