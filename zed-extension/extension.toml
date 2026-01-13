@@ -1,0 +1,20 @@
+id = "totalrecall"
+name = "Total Recall"
+description = "RAG memory system with BM25 search - store and retrieve context across your coding sessions"
+version = "0.1.0"
+schema_version = 1
+authors = ["Vany <https://github.com/Vany>"]
+repository = "https://github.com/Vany/totalrecall"
+
+[context_servers.totalrecall]
+command = {path = "rag-mcp", args = ["serve"]}
+
+[[context_servers.totalrecall.settings]]
+name = "binary_path"
+description = "Path to the rag-mcp binary (optional, uses PATH by default)"
+optional = true
+
+[[context_servers.totalrecall.settings]]
+name = "config_path"
+description = "Path to custom config.toml (optional, uses default ~/.config/rag-mcp/config.toml)"
+optional = true
