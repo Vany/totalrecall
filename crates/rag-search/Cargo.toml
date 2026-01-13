@@ -7,9 +7,11 @@ license.workspace = true
 
 [dependencies]
 rag-core = { path = "../rag-core" }
-sahomedb.workspace = true
+sled.workspace = true
 serde.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+regex.workspace = true
+unicode-segmentation.workspace = true

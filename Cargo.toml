@@ -2,8 +2,6 @@
 members = [
     "crates/rag-mcp-server",
     "crates/rag-core",
-    "crates/rag-embedding",
-    "crates/rag-chunking",
     "crates/rag-search",
 ]
 resolver = "2"
@@ -17,26 +15,7 @@ repository = "https://github.com/user/totalrecall"
 
 [workspace.dependencies]
 # Storage
-sahomedb = "0.4.0"
 sled = "0.34"
-
-# Embeddings & ML
-candle-core = "0.8"
-candle-nn = "0.8"
-candle-transformers = "0.8"
-tokenizers = "0.19"
-
-# AST Parsing
-tree-sitter = "0.23"
-tree-sitter-rust = "0.23"
-tree-sitter-javascript = "0.23"
-tree-sitter-typescript = "0.23"
-tree-sitter-python = "0.23"
-tree-sitter-go = "0.23"
-tree-sitter-c = "0.23"
-tree-sitter-cpp = "0.23"
-tree-sitter-java = "0.23"
-tree-sitter-md = "0.3"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -58,10 +37,13 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 thiserror = "2.0"
-notify = "6.1"
 
 # MCP Protocol
 async-trait = "0.1"
+
+# Text processing
+regex = "1.10"
+unicode-segmentation = "1.12"
 
 [profile.release]
 opt-level = 3

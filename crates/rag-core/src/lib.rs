@@ -1,3 +1,6 @@
+pub mod storage;
+pub mod config;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -8,7 +11,6 @@ use chrono::{DateTime, Utc};
 pub struct Memory {
     pub id: String,
     pub content: String,
-    pub embedding: Vec<f32>,
     pub metadata: MemoryMetadata,
     pub scope: MemoryScope,
     pub created_at: DateTime<Utc>,
@@ -22,7 +24,6 @@ impl Memory {
         Self {
             id: Uuid::new_v4().to_string(),
             content,
-            embedding: Vec::new(),
             metadata,
             scope,
             created_at: now,
