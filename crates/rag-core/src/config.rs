@@ -75,7 +75,12 @@ fn default_chunk_overlap() -> usize {
 }
 
 fn default_global_db_path() -> PathBuf {
-    dirs::config_dir()
+    // Allow override via environment variable (for testing)
+    if let Ok(path) = std::env::var("RAG_MCP_DB_PATH") {
+        return PathBuf::from(path).join("global.db");
+    }
+
+    dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("rag-mcp")
         .join("global.db")
@@ -117,12 +122,12 @@ impl Default for Config {
 impl Config {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_path();
-        
+
         if config_path.exists() {
-            let contents = std::fs::read_to_string(&config_path)
-                .context("Failed to read config file")?;
-            let config: Config = toml::from_str(&contents)
-                .context("Failed to parse config file")?;
+            let contents =
+                std::fs::read_to_string(&config_path).context("Failed to read config file")?;
+            let config: Config =
+                toml::from_str(&contents).context("Failed to parse config file")?;
             Ok(config)
         } else {
             Ok(Self::default())
@@ -131,14 +136,14 @@ impl Config {
 
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_path();
-        
+
         if let Some(parent) = config_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         let contents = toml::to_string_pretty(self)?;
         std::fs::write(&config_path, contents)?;
-        
+
         Ok(())
     }
 

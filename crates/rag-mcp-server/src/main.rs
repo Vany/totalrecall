@@ -71,22 +71,17 @@ enum Commands {
 
 fn init_tracing(stderr_only: bool) {
     if stderr_only {
-        tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "rag_mcp=warn".into()),
-            )
-            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-            .init();
-    } else {
-        tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "rag_mcp=info".into()),
-            )
-            .with(tracing_subscriber::fmt::layer())
-            .init();
+        // Disable tracing for MCP server to keep stdio clean
+        return;
     }
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "rag_mcp=info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 }
 
 fn parse_scope(scope: &str, project_path: Option<PathBuf>) -> Result<MemoryScope> {
@@ -111,9 +106,13 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Serve => {
+            info!("MCP server starting, PID: {}", std::process::id());
             let config = Config::load()?;
+            info!("Config loaded successfully");
             let mut server = McpServer::new(config)?;
+            info!("Server initialized, entering stdio loop");
             server.run()?;
+            info!("Server shutting down normally");
         }
         Commands::Add {
             content,

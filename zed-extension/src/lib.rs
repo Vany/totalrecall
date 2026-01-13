@@ -12,10 +12,12 @@ impl zed::Extension for TotalRecallExtension {
         _context_server_id: &ContextServerId,
         _project: &Project,
     ) -> Result<Command> {
-        // For now, assume the binary is in PATH
-        // TODO: Download/bundle the binary for official distribution
+        // Use full path to avoid PATH issues
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/Users/vany".to_string());
+        let binary_path = format!("{}/.cargo/bin/rag-mcp", home);
+
         Ok(Command {
-            command: "rag-mcp".to_string(),
+            command: binary_path,
             args: vec!["serve".to_string()],
             env: vec![],
         })

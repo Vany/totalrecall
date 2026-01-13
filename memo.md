@@ -722,3 +722,58 @@ Expected outcome:
 - No timeout errors in Zed logs
 - Total Recall tools appear in Claude Code session
 
+
+## 2026-01-13: Debug Logging Added - Tenth Restart
+
+### Current Status - Diagnosing Timeout Issue
+
+**Problem**: The totalrecall MCP server is timing out during initialization (60s timeout), despite:
+- ✅ Extension loading successfully (no errors in recent logs)
+- ✅ Binary responding instantly when tested manually (<1s)
+- ✅ Correct WASM component format and dependencies
+- ✅ Tokio runtime removed (no async blocking)
+
+**Key Observation**: Zed logs show "Broken pipe (os error 32)" before the timeout, suggesting the server process is exiting prematurely when Zed tries to communicate with it.
+
+### Solution: Added Debug Logging
+
+Modified `crates/rag-mcp-server/src/main.rs` to add `eprintln!` debug output:
+- `[rag-mcp PID] Starting server`
+- `[rag-mcp PID] Config loaded`
+- `[rag-mcp PID] Entering stdio loop`
+- `[rag-mcp PID] Exiting normally`
+
+This output goes to stderr and will appear in Zed logs, allowing us to see exactly where the server is failing.
+
+**Manual test confirms it works**:
+```bash
+$ echo '{"jsonrpc":"2.0",...}' | rag-mcp serve
+[rag-mcp 76608] Starting server
+[rag-mcp 76608] Config loaded
+[rag-mcp 76608] Entering stdio loop
+{"jsonrpc":"2.0","id":1,"result":{...}}
+[rag-mcp 76608] Exiting normally
+```
+
+### Changes Made
+1. ✅ Disabled tracing output for serve mode (avoid stdio interference)
+2. ✅ Added eprintln! debug messages with PID
+3. ✅ Rebuilt and installed: `cargo install --path crates/rag-mcp-server --force`
+4. ✅ Verified debug output appears in stderr
+5. 🔄 **Awaiting Zed restart #10**
+
+### Next Steps
+After restart, check Zed logs (`~/Library/Logs/Zed/Zed.log`) for:
+1. Extension loading (should be clean, no errors)
+2. MCP server stderr output showing startup progress
+3. WHERE the server fails (if it does) - before config load? After? During stdio loop?
+
+The debug output will reveal the exact failure point.
+
+### Timeline
+- 17:31 - Removed Tokio runtime, binary rebuilt
+- 18:30-18:34 - Multiple timeout errors (before current session)
+- 18:34 - Current Claude Code session started
+- 18:50 - Added debug logging, binary rebuilt and installed
+- **Next**: Restart Zed to see debug output in logs
+
