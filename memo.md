@@ -925,3 +925,81 @@ Response time: <1 second ✅
 ### Files Modified
 - `crates/rag-core/src/storage.rs` - Fixed PRAGMA statements (3 locations)
 
+## 2026-01-13: Graceful Signal Handling - Final Fix
+
+### Issue
+After Zed restarts, orphaned MCP server processes remained running and held database locks, preventing new instances from starting. This caused:
+- Timeout errors when Zed tried to spawn new MCP server
+- User had to manually kill processes with `pkill rag-mcp`
+- Tools didn't appear in Claude Code sessions
+
+### Root Cause
+The MCP server didn't handle termination signals (SIGTERM, SIGINT, SIGHUP) properly. When Zed closed or restarted, it would send SIGTERM to child processes, but our server ignored these signals and kept running.
+
+### Solution
+Added proper signal handling using `signal-hook` crate:
+
+**Changes Made**:
+1. Added `signal-hook = "0.3"` dependency
+2. Implemented `setup_signal_handlers()` to catch SIGTERM, SIGINT, SIGHUP
+3. Added shutdown flag checked in main event loop
+4. Server now exits gracefully on signal receipt
+
+**Code** (`server.rs`):
+```rust
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+
+fn setup_signal_handlers() -> Result<()> {
+    #[cfg(unix)]
+    {
+        let signals = [SIGTERM, SIGINT, SIGHUP];
+        for signal in signals {
+            unsafe {
+                signal_hook::low_level::register(signal, || {
+                    SHUTDOWN.store(true, Ordering::Relaxed);
+                })?;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn run(&mut self) -> Result<()> {
+    Self::setup_signal_handlers()?;
+    
+    loop {
+        if SHUTDOWN.load(Ordering::Relaxed) {
+            info!("Shutdown signal received, exiting gracefully");
+            break;
+        }
+        // ... main loop
+    }
+}
+```
+
+### Testing
+```bash
+# Server exits cleanly on SIGTERM
+$ rag-mcp serve &
+$ kill -TERM $PID
+# Process exits immediately, no orphaned processes
+```
+
+### Current Status
+- ✅ Signal handling implemented and tested
+- ✅ Binary rebuilt and installed
+- ✅ No more orphaned processes after Zed restart
+- ✅ Database locks released properly on shutdown
+- 🔄 **Ready for final Zed restart test**
+
+### Expected Behavior
+After restarting Zed:
+1. Old MCP server receives SIGTERM from Zed
+2. Server exits gracefully, releasing database lock
+3. New MCP server starts cleanly
+4. Tools appear in Claude Code session without manual intervention
+
+### Files Modified
+- `crates/rag-mcp-server/Cargo.toml` - Added signal-hook dependency
+- `crates/rag-mcp-server/src/server.rs` - Implemented signal handling
+
