@@ -69,14 +69,24 @@ enum Commands {
     },
 }
 
-fn init_tracing() {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "rag_mcp=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+fn init_tracing(stderr_only: bool) {
+    if stderr_only {
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "rag_mcp=warn".into()),
+            )
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "rag_mcp=info".into()),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+    }
 }
 
 fn parse_scope(scope: &str, project_path: Option<PathBuf>) -> Result<MemoryScope> {
@@ -93,9 +103,11 @@ fn parse_scope(scope: &str, project_path: Option<PathBuf>) -> Result<MemoryScope
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    init_tracing();
-
     let cli = Cli::parse();
+
+    // For serve mode, send logs to stderr to keep stdout clean for JSON-RPC
+    let stderr_only = matches!(cli.command, Commands::Serve);
+    init_tracing(stderr_only);
 
     match cli.command {
         Commands::Serve => {
