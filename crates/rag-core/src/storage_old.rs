@@ -1,6 +1,6 @@
 use crate::{Memory, MemoryScope};
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -25,9 +25,11 @@ impl MemoryStore {
             let conn =
                 Connection::open(&global_db_path).context("Failed to open global database")?;
 
-            conn.pragma_update(None, "journal_mode", "WAL")?;
-            conn.pragma_update(None, "synchronous", "NORMAL")?;
+            // Enable WAL mode for concurrent access
+            conn.execute("PRAGMA journal_mode=WAL", [])?;
+            conn.execute("PRAGMA synchronous=NORMAL", [])?;
 
+            // Create table if it doesn't exist
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS memories (
                     id TEXT PRIMARY KEY,
@@ -130,7 +132,6 @@ impl MemoryStore {
                                     .unwrap(),
                                 updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0)
                                     .unwrap(),
-                                version: 1,
                             })
                         })
                         .optional()?;
@@ -160,7 +161,6 @@ impl MemoryStore {
                                     .unwrap(),
                                 updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0)
                                     .unwrap(),
-                                version: 1,
                             })
                         })
                         .optional()?;
@@ -221,7 +221,6 @@ impl MemoryStore {
                                 .unwrap_or_default(),
                             created_at: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap(),
                             updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap(),
-                            version: 1,
                         })
                     })?;
 
@@ -247,7 +246,6 @@ impl MemoryStore {
                                 .unwrap_or_default(),
                             created_at: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap(),
                             updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap(),
-                            version: 1,
                         })
                     })?;
 
@@ -308,8 +306,8 @@ impl MemoryStore {
             }
 
             let conn = Connection::open(&self.global_db_path)?;
-            conn.pragma_update(None, "journal_mode", "WAL")?;
-            conn.pragma_update(None, "synchronous", "NORMAL")?;
+            conn.execute("PRAGMA journal_mode=WAL", [])?;
+            conn.execute("PRAGMA synchronous=NORMAL", [])?;
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS memories (
                     id TEXT PRIMARY KEY,
@@ -335,8 +333,8 @@ impl MemoryStore {
             }
 
             let conn = Connection::open(&db_path)?;
-            conn.pragma_update(None, "journal_mode", "WAL")?;
-            conn.pragma_update(None, "synchronous", "NORMAL")?;
+            conn.execute("PRAGMA journal_mode=WAL", [])?;
+            conn.execute("PRAGMA synchronous=NORMAL", [])?;
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS memories (
                     id TEXT PRIMARY KEY,

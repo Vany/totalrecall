@@ -723,57 +723,205 @@ Expected outcome:
 - Total Recall tools appear in Claude Code session
 
 
-## 2026-01-13: Debug Logging Added - Tenth Restart
+## 2026-01-13: ROOT CAUSE FOUND - Extension Working, Session Stale
 
-### Current Status - Diagnosing Timeout Issue
+### Current Status - SOLUTION IDENTIFIED ✅
 
-**Problem**: The totalrecall MCP server is timing out during initialization (60s timeout), despite:
-- ✅ Extension loading successfully (no errors in recent logs)
-- ✅ Binary responding instantly when tested manually (<1s)
-- ✅ Correct WASM component format and dependencies
-- ✅ Tokio runtime removed (no async blocking)
+**The totalrecall MCP server IS working correctly!**
 
-**Key Observation**: Zed logs show "Broken pipe (os error 32)" before the timeout, suggesting the server process is exiting prematurely when Zed tries to communicate with it.
+**Evidence:**
+- ✅ Extension loaded successfully at Zed startup (21:03:40) - "loading 13, reloading 0, unloading 0"
+- ✅ MCP server running (PID 82837) - spawned by Zed at 21:03:42
+- ✅ Binary location: `/Users/vany/.cargo/bin/rag-mcp serve`
+- ✅ Settings configured: `~/.config/zed/settings.json` has `"totalrecall": {"enabled": true}`
+- ✅ Extension WASM: Correct component format (version 0x1000d), API 0.7.0
+- ✅ Database active: `/Users/vany/Library/Application Support/rag-mcp/global.db` locked by server
 
-### Solution: Added Debug Logging
+**The Problem:**
+**This Claude Code session was started BEFORE the extension was fixed** (started during previous Zed sessions when extension was broken at 17:07-19:48).
 
-Modified `crates/rag-mcp-server/src/main.rs` to add `eprintln!` debug output:
-- `[rag-mcp PID] Starting server`
-- `[rag-mcp PID] Config loaded`
-- `[rag-mcp PID] Entering stdio loop`
-- `[rag-mcp PID] Exiting normally`
+**Proof from logs:**
+- **Working period** (12:48-13:21): totalrecall included in MCP config ✅
+- **Broken period** (17:07-19:48): Extension loading errors, totalrecall NOT in MCP config ❌
+- **Current Zed session** (21:03:40): Extension loads cleanly, NO errors ✅
+- **This Claude session**: Started before 21:03:40, **ZERO "Spawning Claude Code" logs since Zed restart**
 
-This output goes to stderr and will appear in Zed logs, allowing us to see exactly where the server is failing.
+### Log Analysis Shows Extension Was Included When Working
 
-**Manual test confirms it works**:
-```bash
-$ echo '{"jsonrpc":"2.0",...}' | rag-mcp serve
-[rag-mcp 76608] Starting server
-[rag-mcp 76608] Config loaded
-[rag-mcp 76608] Entering stdio loop
-{"jsonrpc":"2.0","id":1,"result":{...}}
-[rag-mcp 76608] Exiting normally
+From `~/Library/Logs/Zed/Zed.log`:
+```
+# WORKING - Jan 13, 12:48-13:21
+--mcp-config {"mcpServers":{"totalrecall":{"type":"stdio","command":"rag-mcp","args":["serve"],"env":{}},"acp":{"type":"sdk","name":"acp"}}}
+
+# BROKEN - Jan 13, 17:07-19:48  
+--mcp-config {"mcpServers":{"acp":{"type":"sdk","name":"acp"}}}
+# Extension loading errors during this period
+
+# CURRENT SESSION - Jan 13, 21:03+
+# No Claude Code sessions spawned yet - this session is OLD
 ```
 
+### Solution
+
+**Restart Zed** (or close/reopen Claude Code panel) to start a fresh Claude Code session. The extension is working now, but this session predates the fix.
+
+After restart, totalrecall tools will appear as:
+- `mcp__totalrecall__store_memory`
+- `mcp__totalrecall__search_memory`
+- `mcp__totalrecall__list_memories`
+- `mcp__totalrecall__delete_memory`
+- `mcp__totalrecall__clear_session`
+
+### Timeline of the Journey
+- 12:48-13:21: Extension working perfectly ✅
+- ~17:00: Something broke extension loading
+- 17:07-19:48: Multiple extension errors (WASM format, API mismatch, dependencies)
+- Fixed issues: WASM component format, API 0.7.0, serde/schemars deps, Tokio removal
+- 21:03:40: Zed restarted, extension loaded cleanly
+- **Now**: Need fresh Claude Code session to pick up working extension
+
+## 2026-01-13: REAL ROOT CAUSE - Database Lock Conflict
+
+### Issue Found After User Confirmed Multiple Restarts
+
+**User reported**: "I already restarted Zed, it doesn't help"
+
+**Investigation revealed**:
+- Extension IS loading correctly (no errors in logs)
+- Extension IS being triggered by Zed (attempts to spawn MCP server)
+- BUT: MCP server was timing out during initialization (60s timeout)
+- Manual test revealed: `Error: could not acquire lock on global.db: Resource temporarily unavailable`
+
+### Root Cause
+**Database lock conflict**: A rogue MCP server process (PID 84922) was running in the background, holding the database lock. When Zed tried to spawn a NEW instance through the extension, it failed to acquire the lock and timed out.
+
+**Why this happened**: During our testing/debugging, we manually spawned MCP server instances that didn't get cleaned up. These orphaned processes blocked Zed's legitimate attempts to start the server.
+
+### Solution Applied
+```bash
+pkill -9 rag-mcp  # Kill all MCP server processes
+```
+
+### Prevention for Future
+The MCP server needs better handling of:
+1. **Single instance enforcement** - Check if another instance is running before starting
+2. **PID file management** - Create a PID file to track the running instance
+3. **Graceful shutdown** - Proper signal handling to release database locks
+
+### Next Action
+**Restart Zed** (after killing all rag-mcp processes) to allow Zed to spawn a fresh MCP server instance that can acquire the database lock successfully.
+
+Expected outcome:
+- Zed spawns MCP server through extension
+- Server acquires database lock (no conflicts)
+- Server responds to initialize within <1s
+- totalrecall tools appear in Claude Code session
+
+## 2026-01-13: FINAL SOLUTION - SQLite with WAL Mode
+
+### Root Cause Analysis
+**The fundamental issue**: Zed spawns one MCP server per Claude Code session, but our database (sled) only supports single-writer access. This caused:
+1. First session acquires database lock ✅
+2. Second session fails with lock error ❌
+3. User can only have ONE Claude Code session with totalrecall
+
+### Solution: SQLite with Write-Ahead Logging (WAL)
+**Replaced sled with SQLite configured for concurrent access**:
+
+```rust
+// Enable WAL mode for concurrent readers/writers
+conn.execute("PRAGMA journal_mode=WAL", [])?;
+conn.execute("PRAGMA synchronous=NORMAL", [])?;
+```
+
+**Key benefits**:
+- ✅ **Multiple concurrent readers** - all sessions can read simultaneously
+- ✅ **Multiple concurrent writers** - WAL mode allows concurrent writes
+- ✅ **No process coordination needed** - SQLite handles all locking internally
+- ✅ **Simple architecture** - each MCP server process is independent
+- ✅ **Shared memory** - all sessions see the same global/project memories
+
 ### Changes Made
-1. ✅ Disabled tracing output for serve mode (avoid stdio interference)
-2. ✅ Added eprintln! debug messages with PID
-3. ✅ Rebuilt and installed: `cargo install --path crates/rag-mcp-server --force`
-4. ✅ Verified debug output appears in stderr
-5. 🔄 **Awaiting Zed restart #10**
+**Dependencies** (`Cargo.toml`):
+- Removed: `sled`, `bincode`
+- Added: `rusqlite = { version = "0.32", features = ["bundled"] }`
 
-### Next Steps
-After restart, check Zed logs (`~/Library/Logs/Zed/Zed.log`) for:
-1. Extension loading (should be clean, no errors)
-2. MCP server stderr output showing startup progress
-3. WHERE the server fails (if it does) - before config load? After? During stdio loop?
+**Storage Layer** (`storage.rs`):
+- Replaced sled database with SQLite
+- Added `Arc<Mutex<Connection>>` for thread-safe access
+- Enabled WAL mode on all database connections
+- Schema: `memories` table with JSON metadata column
 
-The debug output will reveal the exact failure point.
+**No PID locking needed** - SQLite's WAL mode handles all concurrency
 
-### Timeline
-- 17:31 - Removed Tokio runtime, binary rebuilt
-- 18:30-18:34 - Multiple timeout errors (before current session)
-- 18:34 - Current Claude Code session started
-- 18:50 - Added debug logging, binary rebuilt and installed
-- **Next**: Restart Zed to see debug output in logs
+### Testing
+```bash
+cargo build --release
+cargo install --path crates/rag-mcp-server --force
+```
+
+### Next Action
+**Restart Zed** to test the new SQLite-based implementation.
+
+Expected outcome:
+- Multiple Claude Code sessions can run simultaneously ✅
+- All sessions share the same global database ✅
+- No lock errors or conflicts ✅
+- totalrecall tools appear: `mcp__totalrecall__store_memory`, `search_memory`, etc.
+
+## 2026-01-13: PRAGMA Fix - SQLite WAL Mode Working
+
+### Issue Found
+After installing SQLite version, got error:
+```
+Error: Execute returned results - did you mean to call query?
+```
+
+**Root cause**: PRAGMA statements in SQLite return results, but we were using `execute()` which doesn't handle return values.
+
+### Fix Applied
+Changed from `execute()` to `pragma_update()`:
+```rust
+// Before (incorrect):
+conn.execute("PRAGMA journal_mode=WAL", [])?;
+conn.execute("PRAGMA synchronous=NORMAL", [])?;
+
+// After (correct):
+conn.pragma_update(None, "journal_mode", "WAL")?;
+conn.pragma_update(None, "synchronous", "NORMAL")?;
+```
+
+### Migration from Sled
+- Backed up old sled database: `~/Library/Application Support/rag-mcp/global.db.sled-backup`
+- Created fresh SQLite database with WAL mode enabled
+
+### Verification
+```bash
+$ sqlite3 ~/Library/Application\ Support/rag-mcp/global.db "PRAGMA journal_mode;"
+wal
+
+$ ls -lh ~/Library/Application\ Support/rag-mcp/ | grep global.db
+-rw-r--r--  12K global.db        # Main database file
+-rw-r--r--  32K global.db-shm    # Shared memory file
+-rw-r--r--   0B global.db-wal    # Write-ahead log
+```
+
+### Testing Results
+MCP server now starts successfully:
+```bash
+$ echo '{"jsonrpc":"2.0","id":1,"method":"initialize",...}' | rag-mcp serve
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{...},"serverInfo":{"name":"rag-mcp","version":"0.1.0"}}}
+```
+
+Response time: <1 second ✅
+
+### Current Status
+- ✅ SQLite database with WAL mode working correctly
+- ✅ Binary rebuilt and installed at `/Users/vany/.cargo/bin/rag-mcp`
+- ✅ MCP server initializes without errors
+- ✅ Database properly configured for concurrent access
+- 🔄 **Ready for Zed restart to test concurrent sessions**
+
+### Files Modified
+- `crates/rag-core/src/storage.rs` - Fixed PRAGMA statements (3 locations)
 
