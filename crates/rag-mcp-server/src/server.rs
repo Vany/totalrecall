@@ -4,9 +4,12 @@ use rag_search::BM25SearchEngine;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, error, info};
 
 use crate::mcp::{JsonRpcRequest, JsonRpcResponse, Tool};
+
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 pub struct McpServer {
     config: Config,
@@ -26,14 +29,45 @@ impl McpServer {
         })
     }
 
+    fn setup_signal_handlers() -> Result<()> {
+        #[cfg(unix)]
+        {
+            // Handle SIGTERM, SIGINT, SIGHUP
+            let signals = [
+                signal_hook::consts::SIGTERM,
+                signal_hook::consts::SIGINT,
+                signal_hook::consts::SIGHUP,
+            ];
+
+            for signal in signals {
+                unsafe {
+                    signal_hook::low_level::register(signal, || {
+                        SHUTDOWN.store(true, Ordering::Relaxed);
+                    })?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn run(&mut self) -> Result<()> {
         info!("Starting MCP server on stdio");
+
+        // Setup signal handlers for graceful shutdown
+        Self::setup_signal_handlers()?;
 
         let stdin = std::io::stdin();
         let mut reader = BufReader::new(stdin.lock());
         let mut stdout = std::io::stdout();
 
         loop {
+            // Check for shutdown signal
+            if SHUTDOWN.load(Ordering::Relaxed) {
+                info!("Shutdown signal received, exiting gracefully");
+                break;
+            }
+
             let mut line = String::new();
             match reader.read_line(&mut line) {
                 Ok(0) => {
