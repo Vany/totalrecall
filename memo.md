@@ -389,3 +389,56 @@ After restart:
 - Extensions are WASM binaries that implement the `zed_extension_api`
 - The extension's `context_server_command()` method provides the binary path and args
 - Manual MCP config in settings.json doesn't expose tools to Claude Code sessions
+
+## Key Learnings: MCP Integration with Zed
+
+### Critical Discovery
+**Zed requires MCP servers to be packaged as extensions**, not configured directly in settings.json.
+
+### Why Manual Config Failed
+- We initially tried configuring the MCP server in `~/.config/zed/settings.json` with:
+  ```json
+  "totalrecall": {
+    "command": "rag-mcp",
+    "args": ["serve"],
+    "enabled": true
+  }
+  ```
+- Zed was passing this config to Claude Code SDK (visible in logs)
+- But the tools never appeared in Claude Code sessions
+- **Root cause**: Zed's architecture expects MCP servers via extensions, not raw stdio config
+
+### The Extension Approach
+1. **Extension is a WASM binary** compiled with `--target wasm32-wasip1`
+2. **Extension implements `zed_extension_api`** trait with `context_server_command()` method
+3. **Extension provides the command** that Zed uses to spawn the MCP server
+4. **Settings only enable/disable** the extension: `"enabled": true`
+
+### Build & Install Steps
+```bash
+# Install WASM target
+rustup target add wasm32-wasip1
+
+# Build extension
+cd zed-extension
+cargo build --release --target wasm32-wasip1
+
+# Install to Zed
+cp extension.toml ~/Library/Application\ Support/Zed/extensions/installed/totalrecall/
+cp target/wasm32-wasip1/release/totalrecall.wasm ~/Library/Application\ Support/Zed/extensions/installed/totalrecall/extension.wasm
+```
+
+### Workspace Configuration
+- Added `exclude = ["zed-extension"]` to root Cargo.toml
+- Zed extension must build independently from main workspace
+
+### Important Files
+- `zed-extension/src/lib.rs` - Extension implementation
+- `zed-extension/extension.toml` - Extension manifest
+- `~/.config/zed/settings.json` - Just `"enabled": true` for totalrecall
+
+### Verification
+- Extension loads at Zed startup (not Claude Code session restart)
+- Check Zed logs for MCP server spawning
+- Tools appear in Claude Code with `mcp__` prefix (likely `mcp__totalrecall__store_memory` etc.)
+
