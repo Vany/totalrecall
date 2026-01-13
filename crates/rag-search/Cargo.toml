@@ -1,0 +1,15 @@
+[package]
+name = "rag-search"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+rag-core = { path = "../rag-core" }
+sahomedb.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
