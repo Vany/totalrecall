@@ -126,10 +126,16 @@ impl MemoryStore {
                                 scope: MemoryScope::Global,
                                 metadata: serde_json::from_str(&row.get::<_, String>(3)?)
                                     .unwrap_or_default(),
-                                created_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
-                                    .unwrap(),
-                                updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0)
-                                    .unwrap(),
+                                created_at: chrono::DateTime::from_timestamp(
+                                    row.get::<_, i64>(4)?,
+                                    0,
+                                )
+                                .unwrap(),
+                                updated_at: chrono::DateTime::from_timestamp(
+                                    row.get::<_, i64>(5)?,
+                                    0,
+                                )
+                                .unwrap(),
                                 version: 1,
                             })
                         })
@@ -156,10 +162,16 @@ impl MemoryStore {
                                 scope: MemoryScope::Project { path: path.clone() },
                                 metadata: serde_json::from_str(&row.get::<_, String>(3)?)
                                     .unwrap_or_default(),
-                                created_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
-                                    .unwrap(),
-                                updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0)
-                                    .unwrap(),
+                                created_at: chrono::DateTime::from_timestamp(
+                                    row.get::<_, i64>(4)?,
+                                    0,
+                                )
+                                .unwrap(),
+                                updated_at: chrono::DateTime::from_timestamp(
+                                    row.get::<_, i64>(5)?,
+                                    0,
+                                )
+                                .unwrap(),
                                 version: 1,
                             })
                         })
@@ -219,8 +231,10 @@ impl MemoryStore {
                             scope: MemoryScope::Global,
                             metadata: serde_json::from_str(&row.get::<_, String>(3)?)
                                 .unwrap_or_default(),
-                            created_at: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap(),
-                            updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap(),
+                            created_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(4)?, 0)
+                                .unwrap(),
+                            updated_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(5)?, 0)
+                                .unwrap(),
                             version: 1,
                         })
                     })?;
@@ -245,8 +259,10 @@ impl MemoryStore {
                             scope: MemoryScope::Project { path: path.clone() },
                             metadata: serde_json::from_str(&row.get::<_, String>(3)?)
                                 .unwrap_or_default(),
-                            created_at: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap(),
-                            updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap(),
+                            created_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(4)?, 0)
+                                .unwrap(),
+                            updated_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(5)?, 0)
+                                .unwrap(),
                             version: 1,
                         })
                     })?;

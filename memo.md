@@ -1003,3 +1003,49 @@ After restarting Zed:
 - `crates/rag-mcp-server/Cargo.toml` - Added signal-hook dependency
 - `crates/rag-mcp-server/src/server.rs` - Implemented signal handling
 
+
+## 2026-01-13: SQLite Timestamp Type Bug Fix
+
+### Issue Found
+After the SQLite migration, search_memory tool was failing with error:
+```
+Internal error: out of range integral type conversion attempted
+```
+
+### Root Cause
+In `crates/rag-core/src/storage.rs`, when retrieving timestamps from SQLite, the code was using:
+```rust
+created_at: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap(),
+updated_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap(),
+```
+
+The compiler couldn't infer that `row.get(4)?` should return `i64`, causing a type conversion error when SQLite returned the INTEGER value.
+
+### Fix Applied
+Explicitly specify the type when retrieving timestamps:
+```rust
+created_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(4)?, 0).unwrap(),
+updated_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(5)?, 0).unwrap(),
+```
+
+### Changes Made
+**File**: `crates/rag-core/src/storage.rs`
+**Lines affected**: 4 locations where timestamps are retrieved from SQLite:
+1. Line 129-131: Global scope `get()` method
+2. Line 159-161: Project scope `get()` method
+3. Line 222-223: Global scope `list()` method
+4. Line 248-249: Project scope `list()` method
+
+### Build and Deploy
+```bash
+cargo build --release          # Completed in 15.00s
+cargo install --path crates/rag-mcp-server --force
+kill -9 89451                  # Killed old MCP server process
+```
+
+### Testing
+After Zed restart, the fixed binary will be picked up and search_memory should work correctly.
+
+### Lesson Learned
+When using rusqlite's `row.get()`, always explicitly specify the type with turbofish syntax (`::<_, Type>`) for INTEGER columns to avoid type inference issues, especially when the return value is used in functions that accept multiple numeric types.
+
