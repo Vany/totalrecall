@@ -219,7 +219,11 @@ impl MemoryStore {
 
         match scope {
             MemoryScope::Session => {
-                memories.extend(self.session.values().cloned());
+                let mut all_memories: Vec<Memory> = self.session.values().cloned().collect();
+                // Sort by created_at descending (newest first)
+                all_memories.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+                // Apply offset and limit
+                memories.extend(all_memories.into_iter().skip(offset).take(limit));
             }
             MemoryScope::Global => {
                 if let Some(db) = &self.global_db {

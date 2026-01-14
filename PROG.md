@@ -6,4 +6,4 @@
 
 ## rules 
 
-- if bug ws found, check, did we made the same in other places?
+- if bug was found, check, did we made the same in other places?

@@ -1,6 +1,6 @@
 id = "totalrecall"
 name = "Total Recall"
-description = "RAG memory system with BM25 search - store and retrieve context across your coding sessions"
+description = "Memory system with BM25 search for storing and retrieving context across coding sessions"
 version = "0.1.0"
 schema_version = 1
 authors = ["Vany <https://github.com/Vany>"]
@@ -11,3 +11,4 @@ kind = "Rust"
 version = "0.7.0"
 
 [context_servers.totalrecall]
+name = "Total Recall"

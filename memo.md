@@ -1,5 +1,42 @@
 # Development Memo
 
+## 2026-01-14: Session Scope Pagination Bug Fix
+
+### Issue Found During Release Testing
+
+**Problem**: Session scope `list()` was ignoring limit and offset parameters
+- **Test**: `test_list_memories_with_pagination` was failing
+- **Expected**: Request 3 memories with limit=3, get "Found 3 memories"
+- **Actual**: Got "Found 5 memories" (all memories, ignoring limit)
+
+**Root Cause**: 
+- `MemoryScope::Session` branch in `list()` used: `memories.extend(self.session.values().cloned())`
+- This retrieved ALL session memories, ignoring pagination parameters
+- Global and Project scopes were correct (using SQL LIMIT/OFFSET)
+
+**Fix Applied** (`crates/rag-core/src/storage.rs:221-231`):
+```rust
+MemoryScope::Session => {
+    let mut all_memories: Vec<Memory> = self.session.values().cloned().collect();
+    // Sort by created_at descending (newest first)
+    all_memories.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    // Apply offset and limit
+    memories.extend(
+        all_memories
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+    );
+}
+```
+
+**Checked per PROG.md rule**: "if bug was found, check, did we made the same in other places?"
+- ✅ Global scope: Uses SQL `LIMIT ?1 OFFSET ?2` - Correct
+- ✅ Project scope: Uses SQL `LIMIT ?1 OFFSET ?2` - Correct
+- ✅ Session scope: Now applies pagination correctly
+
+**Testing**: All 12 tests pass ✅
+
 ## 2026-01-14: Critical Bugfixes - list_all and Project Scope
 
 ### Issues Found and Fixed

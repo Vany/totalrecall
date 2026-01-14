@@ -15,6 +15,7 @@ Express your self and enjoy the work.
 
 
 ## Files
+Auxilary docs is in the design folder, read it.
 Each module has its own directory and may contain following files, use it instead of CLAUDE.md:- prog.md - general rules
 - spec.md - specifications
 - memo.md - information about development

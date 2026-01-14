@@ -1,98 +1,106 @@
 # Total Recall - Zed Extension
 
-Semantic memory system for Zed editor using BM25 keyword search.
+A memory system with BM25 search for Zed editor, enabling AI assistants to store and retrieve context across coding sessions.
 
 ## Features
 
-- **Store memories** - Save important code snippets, documentation, and notes
-- **BM25 search** - Fast keyword search with relevance ranking
-- **Multi-scope** - Session (temporary), Project (local), Global (shared)
-- **Zero dependencies** - Pure Rust, no Python or ML models required
+- **Store Memories** - Save code snippets, documentation, and project knowledge
+- **BM25 Search** - Fast keyword search with relevance ranking  
+- **Multi-Scope Storage** 
+  - **Session**: Temporary memories (cleared when Zed closes)
+  - **Project**: Stored in `.rag-mcp/` within your project
+  - **Global**: Shared across all projects
+- **Zero Configuration** - Works out of the box
+- **Cross-Platform** - macOS (Apple Silicon), Linux, Windows
 
 ## Installation
 
-### Option 1: Install from Binary (Recommended)
+1. Open Zed
+2. Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Linux/Windows)
+3. Type "extensions" and select "zed: extensions"
+4. Search for "Total Recall"
+5. Click Install
 
-1. Build or download the `rag-mcp` binary:
-   ```bash
-   cargo install --git https://github.com/Vany/totalrecall
-   ```
-
-2. Install this extension in Zed:
-   - Open Zed
-   - Press `cmd-shift-p` (macOS) or `ctrl-shift-p` (Linux/Windows)
-   - Type "zed: extensions"
-   - Click "Install Dev Extension"
-   - Select this directory
-
-### Option 2: Build from Source
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Vany/totalrecall.git
-   cd totalrecall
-   ```
-
-2. Build the binary:
-   ```bash
-   cargo build --release
-   ```
-
-3. Copy to your PATH:
-   ```bash
-   cp target/release/rag-mcp ~/.local/bin/  # or /usr/local/bin
-   ```
-
-4. Install the Zed extension (same as Option 1, step 2)
+The extension will automatically download the appropriate MCP server binary for your platform on first use.
 
 ## Usage
 
-Once installed, Total Recall adds these tools to Claude/AI assistants in Zed:
+Once installed, Total Recall adds memory capabilities to Claude and other AI assistants in Zed.
 
-### Store Memory
-```
-Store this information about Rust async:
-- async/await is built on futures
-- tokio is the most popular runtime
-```
+### Store Information
 
-The AI will use the `store_memory` tool to save this.
+Ask the AI to remember important information:
 
-### Search Memory
 ```
-What do I know about async Rust?
+Remember that our API uses JWT tokens with 24-hour expiration.
+Store this for future reference.
 ```
 
-The AI will use the `search_memory` tool to find relevant memories.
+The AI will use the `store_memory` tool to save this information.
 
-### List Memories
+### Search Memories
+
+Ask the AI to recall information:
+
 ```
-Show me all my memories about databases
+What do you know about our authentication system?
 ```
 
-### Clear Session
+The AI will automatically search your memories using the `search_memory` tool.
+
+### Manage Memories
+
+List all stored memories:
+```
+Show me all my project memories
+```
+
+Clear session memories:
 ```
 Clear my session memories
 ```
 
 ## Memory Scopes
 
-- **session** - Temporary, cleared when Zed closes
-- **project** - Stored in `.rag-mcp/` in your project
-- **global** - Shared across all projects at `~/.config/rag-mcp/`
+### Session Scope
+- Temporary, in-memory only
+- Cleared when Zed closes
+- Perfect for temporary context during a coding session
+
+### Project Scope  
+- Stored in `<project>/.rag-mcp/data.db`
+- Persists across sessions
+- Specific to each project
+- Shared with team if committed to git
+
+### Global Scope
+- Stored in `~/Library/Application Support/rag-mcp/global.db` (macOS)
+- Shared across all projects
+- Personal knowledge base
+- Persists indefinitely
+
+## MCP Tools
+
+The extension provides these Model Context Protocol tools:
+
+- `store_memory` - Store content with tags and scope
+- `search_memory` - BM25 keyword search across memories
+- `list_memories` - Browse stored memories with pagination
+- `delete_memory` - Remove specific memory by ID
+- `clear_session` - Clear all session-scoped memories
 
 ## Configuration
 
-Edit `~/.config/rag-mcp/config.toml`:
+Total Recall works without configuration, but you can customize it by editing `~/.config/rag-mcp/config.toml`:
 
 ```toml
 [server]
 log_level = "info"
 
 [search]
-default_k = 5
-bm25_k1 = 1.2
-bm25_b = 0.75
+default_k = 5        # Number of search results
+bm25_k1 = 1.2        # BM25 term frequency saturation
+bm25_b = 0.75        # BM25 length normalization
 
 [storage]
 global_db_path = "~/.config/rag-mcp/global.db"
@@ -100,22 +108,51 @@ global_db_path = "~/.config/rag-mcp/global.db"
 
 ## Troubleshooting
 
-### Binary not found
-Make sure `rag-mcp` is in your PATH:
+### Extension Not Loading
+
+Check Zed's developer console for errors:
+- View → Toggle Developer Tools
+- Look for "totalrecall" errors
+
+### Binary Download Issues
+
+The extension downloads the MCP server binary on first use. If this fails:
+
+1. Check your internet connection
+2. Verify GitHub is accessible
+3. Check Zed logs for download errors
+
+### Manual Installation
+
+If automatic download fails, you can install the binary manually:
+
 ```bash
-which rag-mcp
+# Install from source
+cargo install --git https://github.com/Vany/totalrecall
+
+# Or download from releases
+# https://github.com/Vany/totalrecall/releases
 ```
 
-### Check logs
-View MCP server logs in Zed's developer tools.
+Then configure the extension to use your binary (advanced users only).
 
-### Test manually
-Test the server works:
-```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | rag-mcp serve
-```
+## Privacy & Security
+
+- **Local-only**: All data stored locally on your machine
+- **No network calls**: Except for downloading the binary on first install
+- **Your control**: You can delete memories at any time
+- **SQLite storage**: Standard, inspectable database format
 
 ## Development
 
-See the main repository for development instructions:
+See the main repository for development instructions:  
 https://github.com/Vany/totalrecall
+
+## License
+
+MIT - See LICENSE file
+
+## Support
+
+- Issues: https://github.com/Vany/totalrecall/issues
+- Repository: https://github.com/Vany/totalrecall
