@@ -209,7 +209,12 @@ impl MemoryStore {
         }
     }
 
-    pub fn list(&self, scope: &MemoryScope, limit: usize, offset: usize) -> Result<Vec<Memory>> {
+    pub fn list(
+        &mut self,
+        scope: &MemoryScope,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<Memory>> {
         let mut memories = Vec::new();
 
         match scope {
@@ -245,31 +250,31 @@ impl MemoryStore {
                 }
             }
             MemoryScope::Project { path } => {
-                if let Some(db) = self.project_dbs.get(path) {
-                    let conn = db.lock().unwrap();
-                    let mut stmt = conn.prepare(
-                        "SELECT id, content, scope, metadata, created_at, updated_at
-                         FROM memories ORDER BY created_at DESC LIMIT ?1 OFFSET ?2",
-                    )?;
+                // Ensure project DB is loaded
+                let db = self.get_or_create_project_db(path)?;
+                let conn = db.lock().unwrap();
+                let mut stmt = conn.prepare(
+                    "SELECT id, content, scope, metadata, created_at, updated_at
+                     FROM memories ORDER BY created_at DESC LIMIT ?1 OFFSET ?2",
+                )?;
 
-                    let rows = stmt.query_map(params![limit, offset], |row| {
-                        Ok(Memory {
-                            id: row.get(0)?,
-                            content: row.get(1)?,
-                            scope: MemoryScope::Project { path: path.clone() },
-                            metadata: serde_json::from_str(&row.get::<_, String>(3)?)
-                                .unwrap_or_default(),
-                            created_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(4)?, 0)
-                                .unwrap(),
-                            updated_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(5)?, 0)
-                                .unwrap(),
-                            version: 1,
-                        })
-                    })?;
+                let rows = stmt.query_map(params![limit, offset], |row| {
+                    Ok(Memory {
+                        id: row.get(0)?,
+                        content: row.get(1)?,
+                        scope: MemoryScope::Project { path: path.clone() },
+                        metadata: serde_json::from_str(&row.get::<_, String>(3)?)
+                            .unwrap_or_default(),
+                        created_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(4)?, 0)
+                            .unwrap(),
+                        updated_at: chrono::DateTime::from_timestamp(row.get::<_, i64>(5)?, 0)
+                            .unwrap(),
+                        version: 1,
+                    })
+                })?;
 
-                    for row in rows {
-                        memories.push(row?);
-                    }
+                for row in rows {
+                    memories.push(row?);
                 }
             }
         }
@@ -277,8 +282,9 @@ impl MemoryStore {
         Ok(memories)
     }
 
-    pub fn list_all(&self, scope: &MemoryScope) -> Result<Vec<Memory>> {
-        self.list(scope, usize::MAX, 0)
+    pub fn list_all(&mut self, scope: &MemoryScope) -> Result<Vec<Memory>> {
+        // SQLite can't handle usize::MAX, use i64::MAX instead (safe limit)
+        self.list(scope, i64::MAX as usize, 0)
     }
 
     pub fn clear_session(&mut self) {
@@ -286,7 +292,7 @@ impl MemoryStore {
         self.session.clear();
     }
 
-    pub fn stats(&self, scope: &MemoryScope) -> Result<MemoryStats> {
+    pub fn stats(&mut self, scope: &MemoryScope) -> Result<MemoryStats> {
         let count = match scope {
             MemoryScope::Session => self.session.len(),
             MemoryScope::Global => {
@@ -300,14 +306,12 @@ impl MemoryStore {
                 }
             }
             MemoryScope::Project { path } => {
-                if let Some(db) = self.project_dbs.get(path) {
-                    let conn = db.lock().unwrap();
-                    let count: i64 =
-                        conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))?;
-                    count as usize
-                } else {
-                    0
-                }
+                // Ensure project DB is loaded
+                let db = self.get_or_create_project_db(path)?;
+                let conn = db.lock().unwrap();
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))?;
+                count as usize
             }
         };
 

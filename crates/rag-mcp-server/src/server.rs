@@ -351,7 +351,7 @@ impl McpServer {
         }))
     }
 
-    fn tool_list_memories(&self, args: &Value) -> Result<Value> {
+    fn tool_list_memories(&mut self, args: &Value) -> Result<Value> {
         let scope_str = args["scope"].as_str().context("Missing scope")?;
         let limit = args["limit"].as_u64().unwrap_or(50) as usize;
         let offset = args["offset"].as_u64().unwrap_or(0) as usize;

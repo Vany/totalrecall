@@ -1,5 +1,62 @@
 # Development Memo
 
+## 2026-01-14: Critical Bugfixes - list_all and Project Scope
+
+### Issues Found and Fixed
+
+**Issue 1: SQLite LIMIT Parameter Overflow**
+- **Problem**: `list_all()` was using `usize::MAX` as LIMIT parameter
+- **Error**: "out of range integral type conversion attempted"
+- **Root Cause**: SQLite can't handle `usize::MAX` (18446744073709551615) as INTEGER
+- **Fix**: Changed to use `i64::MAX` instead, which SQLite handles correctly
+- **File**: `crates/rag-core/src/storage.rs:280`
+
+**Issue 2: Project Scope Database Not Loading**
+- **Problem**: Project scope memories could be stored but not listed/searched
+- **Root Cause**: `list()` and `stats()` methods checked `project_dbs` HashMap but didn't call `get_or_create_project_db()` to load the database first
+- **Fix**: 
+  - Changed `list()`, `list_all()`, and `stats()` from `&self` to `&mut self`
+  - Made them call `get_or_create_project_db()` for project scope
+  - Updated all callers in `main.rs` and `server.rs` to use `mut store`
+- **Files Modified**:
+  - `crates/rag-core/src/storage.rs` - Updated method signatures and implementations
+  - `crates/rag-mcp-server/src/main.rs` - Updated CLI command handlers
+  - `crates/rag-mcp-server/src/server.rs` - Updated MCP tool handlers
+
+### Testing Results - All Passed ✅
+
+**CLI Commands Tested**:
+```bash
+# Store - Working
+rag-mcp add --content "..." --tags test --scope global
+rag-mcp add --content "..." --tags test --scope project --project-path /path
+
+# Search - Working (fixed!)
+rag-mcp search "keyword" --k 5
+rag-mcp search "keyword" --scope project --project-path /path
+
+# List - Working
+rag-mcp list --limit 10
+rag-mcp list --scope project --project-path /path
+
+# Delete - Working
+rag-mcp delete <id>
+
+# Stats - Working
+rag-mcp stats
+rag-mcp stats --scope project --project-path /path
+```
+
+**All Three Scopes Verified**:
+- ✅ **Global**: Stores in `~/Library/Application Support/rag-mcp/global.db`
+- ✅ **Project**: Stores in `<project>/.rag-mcp/data.db`
+- ✅ **Session**: In-memory (not persisted)
+
+### Current Status
+- Binary rebuilt and installed at `/Users/vany/.cargo/bin/rag-mcp`
+- All CLI functionality working correctly
+- Ready for MCP server testing in Zed/Claude Code
+
 ## 2026-01-13: Phase 1 Complete - BM25 Search & MCP Server
 
 ### Major Decisions

@@ -142,7 +142,7 @@ fn main() -> Result<()> {
             project_path,
         } => {
             let config = Config::load()?;
-            let store = MemoryStore::new(config.storage.global_db_path)?;
+            let mut store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
 
             let memories = store.list_all(&scope)?;
@@ -172,7 +172,7 @@ fn main() -> Result<()> {
             project_path,
         } => {
             let config = Config::load()?;
-            let store = MemoryStore::new(config.storage.global_db_path)?;
+            let mut store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
 
             let memories = store.list(&scope, limit, 0)?;
@@ -210,7 +210,7 @@ fn main() -> Result<()> {
             project_path,
         } => {
             let config = Config::load()?;
-            let store = MemoryStore::new(config.storage.global_db_path)?;
+            let mut store = MemoryStore::new(config.storage.global_db_path)?;
             let scope = parse_scope(&scope, project_path)?;
 
             let stats = store.stats(&scope)?;
